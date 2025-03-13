@@ -56,3 +56,46 @@ API_KEY = os.environ.get("TERMINAI_API_KEY")
 if not API_KEY:
     logger.error("TERMINAI_API_KEY environment variable not set")
     raise ValueError("TERMINAI_API_KEY environment variable not set")
+
+def verify_api_key(x_api_key: str = Header(None, description="API key for authentication")):
+    if not x_api_key:
+        logger.warning("API request was missing API key")
+        raise HTTPException(status_code=401, detail="API key is required")
+    
+    if x_api_key != API_KEY:
+        logger.warning(f"Invalid API key attempted: {x_api_key[:5]}...")
+        raise HTTPException(status_code=401, detail="Invalid API key")
+    
+    return x_api_key        # Returning API key if valid 
+
+# Defining data model for request and response 
+
+class CommandRequest(BaseModel):
+    """Request model for generating commands"""
+    query: str
+    context: Dict[str, Any] = {}
+    
+    class Config:               # Examples for API documentation
+        schema_extra = {
+            "example" : {
+                "query" : "How do I find large files in the current directory?",
+                "context": {
+                    "os": "Darwin 22.1.0",
+                    "shell": "/bin/zsh",
+                    "current_dir": "~/projects"
+                }
+            }
+        }
+        
+class CommandResponse(BaseModel):
+    """Response model for generated commands"""
+    command: str
+    explanation: Optional[str] = None
+    
+    class Config:
+        schema_extra = {
+            "example": {
+                "command": "find . -type f -size +10M | sort -rh",
+                "explanation": "This command finds files larger than 10MB and sorts them by size in descending order."
+            }
+        }
