@@ -99,3 +99,75 @@ class CommandResponse(BaseModel):
                 "explanation": "This command finds files larger than 10MB and sorts them by size in descending order."
             }
         }
+        
+        
+# Adding API endpoints
+@app.post("/generate-command", response_model=CommandResponse)
+async def generate_command(
+    request: CommandRequest, 
+    api_key: str = Depends(verify_api_key)      # Depends function injects the result of verify_api_key
+):
+    """
+    Generate a terminal command based on the natural language query and context.
+    
+    Args:
+        request: The request containing the query and context
+        api_key: Verified API key from the dependency
+        
+    Returns:
+        CommandResponse: The generated command and optional explanation
+        
+    Raises:
+        HTTPException: For errors in processing the request
+    """
+    try: 
+        logger.info(f"Processing query: {request.query}")
+        
+        # Preparing the prompt
+        system_prompt = """
+        You are TerminAI, an AI assistant specialized in terminal commands and operations.
+        Provide clear, concise, and accurate responses to user queries.
+        For command suggestions, output ONLY the exact command the user should run.
+        Do not include explanations, comments, or markdown formatting.
+        """
+        
+        # Formatting the context information
+        context_prompt = "Context information:\n"
+        if request.context.get("os"):
+            context_prompt += f"Operating System: {request.context['os']}\n"
+        if request.context.get("shell"):
+            context_prompt += f"Shell: {request.context['shell']}\n"
+        if request.context.get("current_dir"):
+            context_prompt += f"Current Directory: {request.context['current_dir']}\n"
+        
+        # Basic prompt engineering
+        user_prompt = f"{context_prompt}\nUser Query: {request.query}\n\nPlease provide the exact terminal command for this query:"
+        
+        logger.debug(f"Sending prompt to Groq: {user_prompt[:100]}...")
+        
+        # Call to Groq API
+        chat_completion = groq_client.chat.completions.create(
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            model="llama3-70b-8192",  # You can make this configurable
+            temperature=0.2,  # Lower for more deterministic responses
+            max_tokens=256,  # Smaller responses for just commands
+        )
+        
+        # Extract the generated command response 
+        commandRes = chat_completion.choices[0].message.content.strip()
+        logger.info(f"Generated command: {commandRes}") 
+        
+        # Returning the result
+        return CommandResponse(command=commandRes)
+    
+    except Exception as e:
+        logger.error(f"Error generating command: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error generating command: {str(e)}")
+        
+@app.get("/health")
+async def health_check():
+    """Health check endpoint to verify the API is running"""
+    return {"status": "healthy", "service": "TerminAI API"}
