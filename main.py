@@ -171,3 +171,10 @@ async def generate_command(
 async def health_check():
     """Health check endpoint to verify the API is running"""
     return {"status": "healthy", "service": "TerminAI API"}
+
+# Setting up main entry point
+# Run the application when executed directly
+if __name__ == "__main__":
+    import uvicorn
+    logger.info("Starting TerminAI API server")
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
