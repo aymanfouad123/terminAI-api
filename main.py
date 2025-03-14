@@ -101,8 +101,10 @@ class CommandResponse(BaseModel):
         }
         
         
-# Adding API endpoints
-@app.post("/generate-command", response_model=CommandResponse)
+# Adding API endpoints 
+
+# Endpoint for Ask
+@app.post("/ask", response_model=CommandResponse)
 async def generate_command(
     request: CommandRequest, 
     api_key: str = Depends(verify_api_key)      # Depends function injects the result of verify_api_key
@@ -123,7 +125,7 @@ async def generate_command(
     try: 
         logger.info(f"Processing query: {request.query}")
         
-        # Preparing the prompt
+        # Ask-specific prompt
         system_prompt = """
         You are TerminAI, an AI assistant specialized in terminal commands and operations.
         Provide clear, concise, and accurate responses to user queries.
@@ -157,16 +159,72 @@ async def generate_command(
         )
         
         # Extract the generated command response 
-        commandRes = chat_completion.choices[0].message.content.strip()
-        logger.info(f"Generated command: {commandRes}") 
+        ask_response = chat_completion.choices[0].message.content.strip()
+        logger.info(f"Generated question explaination: {ask_response}") 
         
         # Returning the result
-        return CommandResponse(command=commandRes)
+        return CommandResponse(command=ask_response)
     
     except Exception as e:
         logger.error(f"Error generating command: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error generating command: {str(e)}")
+
+# Endpoint for Debug 
+@app.post("/debug", response_class=CommandResponse)
+async def debug_error(
+    request: CommandRequest, 
+    api_key: str = Depends(verify_api_key)
+):
+    """Analyze a terminal error and provide debugging guidance."""
+    try:
+        logger.info(f"Processing error debug: {request.query}")
         
+        # Debug-specific prompt
+        system_prompt = """
+        You are TerminAI, an AI assistant specialized in debugging terminal issues.
+        Analyze terminal errors and provide clear, actionable explanations and solutions.
+        Format your response in markdown with clear sections covering what the error means,
+        likely causes, solutions, and prevention tips.
+        """
+        
+        # Formatting the context information
+        context_prompt = "Context information:\n"
+        if request.context.get("os"):
+            context_prompt += f"Operating System: {request.context['os']}\n"
+        if request.context.get("shell"):
+            context_prompt += f"Shell: {request.context['shell']}\n"
+        if request.context.get("current_dir"):
+            context_prompt += f"Current Directory: {request.context['current_dir']}\n"
+        
+        # Basic prompt engineering
+        user_prompt = f"{context_prompt}\nError Message: {request.query}\n\nPlease analyze this terminal error:"
+        
+        logger.debug(f"Sending prompt to Groq: {user_prompt[:100]}...")
+        
+        # Call to Groq API
+        chat_completion = groq_client.chat.completions.create(
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            model="llama3-70b-8192",  # You can make this configurable
+            temperature=0.3,  # Slightly higher for more comprehensive explanations
+            max_tokens=800,   # Larger response for detailed debugging
+        )
+        
+        # Extract the generated command response 
+        debug_response = chat_completion.choices[0].message.content.strip()
+        logger.info(f"Generated debug analysis (first 100 chars): {debug_response[:100]}...")
+        
+        
+        # Returning the result
+        return CommandResponse(command=debug_response)
+    
+    except Exception as e:
+        logger.error(f"Error generating command: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error generating command: {str(e)}")
+
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint to verify the API is running"""
