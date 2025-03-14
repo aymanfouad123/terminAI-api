@@ -105,22 +105,12 @@ class CommandResponse(BaseModel):
 
 # Endpoint for Ask
 @app.post("/ask", response_model=CommandResponse)
-async def generate_command(
+async def ask(
     request: CommandRequest, 
     api_key: str = Depends(verify_api_key)      # Depends function injects the result of verify_api_key
 ):
     """
     Generate a terminal command based on the natural language query and context.
-    
-    Args:
-        request: The request containing the query and context
-        api_key: Verified API key from the dependency
-        
-    Returns:
-        CommandResponse: The generated command and optional explanation
-        
-    Raises:
-        HTTPException: For errors in processing the request
     """
     try: 
         logger.info(f"Processing query: {request.query}")
@@ -170,8 +160,8 @@ async def generate_command(
         raise HTTPException(status_code=500, detail=f"Error generating command: {str(e)}")
 
 # Endpoint for Debug 
-@app.post("/debug", response_class=CommandResponse)
-async def debug_error(
+@app.post("/debug", response_model=CommandResponse)
+async def debug(
     request: CommandRequest, 
     api_key: str = Depends(verify_api_key)
 ):
